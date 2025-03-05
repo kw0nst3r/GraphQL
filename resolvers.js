@@ -18,7 +18,7 @@ export const resolvers = {
       const artists = await (await artistCollection()).find({}).toArray();
       if (!artists) {
         throw new GraphQLError('Internal Server Error', { 
-            extensions: { code: 'INTERNAL_SERVER_ERROR' } });
+            extensions: { code: 'INTERNAL_SERVER_ERROR' }});
       }
 
       await redisClient.setEx(cacheKey, 3600, JSON.stringify(artists));
@@ -99,6 +99,20 @@ export const resolvers = {
       await redisClient.set(cacheKey, JSON.stringify(company));
       return company;
     },
+
+    companyByFoundedYear: async (_, args) => {
+      console.log(`Searching for companies founded between ${args.min} and ${args.max}`);
+  
+      const minYear = Number(args.min);
+      const maxYear = Number(args.max);
+  
+      const companies = await (await recordCompanyCollection()).find({
+          foundedYear: { $gte: minYear, $lte: maxYear }
+      }).toArray();
+  
+      console.log("Found companies:", companies);
+      return companies; 
+  }, 
 
     getSongsByArtistId: async (_, args) => {
       const artist = await (await artistCollection()).findOne({ _id: new ObjectId(args.artistId) });
@@ -197,6 +211,6 @@ export const resolvers = {
       await (await albumCollection()).deleteMany({ recordCompanyId: company._id });
       await (await recordCompanyCollection()).deleteOne({ _id: company._id });
       return company;
-    }
+    },
   }
 };
