@@ -91,7 +91,8 @@ const typeDefs = gql`
 
     # Record Company Mutations
     addCompany(name: String!, foundedYear: Int!, country: String!): RecordCompany  
-    editCompany(_id: String!, name: String, foundedYear: Int, country: String): RecordCompany 
+    editCompany(_id: String!, name: String, foundedYear: Int, country: String): RecordCompany
+    removeCompany(_id: String!): RecordCompany
   }
 `;
 
