@@ -102,26 +102,62 @@ export const resolvers = {
 
     companyByFoundedYear: async (_, args) => {
       console.log(`Searching for companies founded between ${args.min} and ${args.max}`);
-  
+    
       const minYear = Number(args.min);
       const maxYear = Number(args.max);
-  
+    
       const companies = await (await recordCompanyCollection()).find({
           foundedYear: { $gte: minYear, $lte: maxYear }
       }).toArray();
-  
+    
       console.log("Found companies:", companies);
       return companies; 
-  }, 
+    },
 
     getSongsByArtistId: async (_, args) => {
-      const artist = await (await artistCollection()).findOne({ _id: new ObjectId(args.artistId) });
-      if (!artist) throw new GraphQLError('Artist Not Found', { 
-        extensions: { code: 'NOT_FOUND' } });
-
-      const artistAlbums = await (await albumCollection()).find({ artistId: new ObjectId(args.artistId) }).toArray();
-      return artistAlbums.flatMap(album => album.songs);
-    }
+      try {
+        if (!ObjectId.isValid(args.artistId)) {
+          throw new GraphQLError('Invalid artist ID format', {
+            extensions: { code: 'BAD_USER_INPUT' }
+          });
+        }
+    
+        const artist = await (await artistCollection()).findOne({ _id: new ObjectId(args.artistId) });
+    
+        if (!artist) {
+          throw new GraphQLError('Artist Not Found', {
+            extensions: { code: 'NOT_FOUND' }
+          });
+        }
+    
+        if (!artist.albums || artist.albums.length === 0) {
+          throw new GraphQLError('No albums found for this artist', {
+            extensions: { code: 'NOT_FOUND' }
+          });
+        }
+    
+        // ✅ Convert album IDs to ObjectId (fixes potential type mismatch)
+        const albumIds = artist.albums.map(id => new ObjectId(id));
+    
+        const artistAlbums = await (await albumCollection()).find({
+          _id: { $in: albumIds } // 🔥 Ensures correct format
+        }).toArray();
+    
+        if (!artistAlbums || artistAlbums.length === 0) {
+          throw new GraphQLError('No matching albums found', {
+            extensions: { code: 'NOT_FOUND' }
+          });
+        }
+    
+        const songs = artistAlbums.flatMap(album => album.songs);
+        return songs.length > 0 ? songs : null;
+      } catch (error) {
+        console.error('Error fetching songs:', error);
+        throw new GraphQLError('Internal Server Error', {
+          extensions: { code: 'INTERNAL_SERVER_ERROR' }
+        });
+      }
+    }    
   },
 
   Artist: {
@@ -194,23 +230,7 @@ export const resolvers = {
         country: args.country,
         albums: []
       };
-      const insertResult = await (await recordCompanyCollection()).insertOne(newCompany);
-      if (!insertResult.acknowledged) {
-        throw new GraphQLError('Failed to Add Company', { 
-            extensions: { code: 'INTERNAL_SERVER_ERROR' } });
-      }
-      return newCompany;
-    },
-
-    removeCompany: async (_, args) => {
-      const company = await (await recordCompanyCollection()).findOne({ _id: new ObjectId(args._id) });
-      if (!company) {
-        throw new GraphQLError('Record Company Not Found', { 
-            extensions: { code: 'NOT_FOUND' } });
-      }
-      await (await albumCollection()).deleteMany({ recordCompanyId: company._id });
-      await (await recordCompanyCollection()).deleteOne({ _id: company._id });
-      return company;
-    },
+      return await (await recordCompanyCollection()).insertOne(newCompany);
+    }
   }
 };
